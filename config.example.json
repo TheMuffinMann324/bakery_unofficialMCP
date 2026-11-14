@@ -1,0 +1,14 @@
+{
+  "workspace": "C:/FiveM/server-data/resources",
+  "servers": [
+    {
+      "id": "dev",
+      "environment": "development",
+      "cwd": "C:/FiveM/server-data",
+      "resources": "resources",
+      "bridgePort": 32124,
+      "tokenEnv": "FIVEM_MCP_TOKEN",
+      "tokenConfig": "server.cfg"
+    }
+  ]
+}

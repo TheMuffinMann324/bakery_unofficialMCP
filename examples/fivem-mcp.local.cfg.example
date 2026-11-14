@@ -1,0 +1,20 @@
+# Copy to fivem-mcp.local.cfg beside server.cfg. Keep the copy private.
+set bakery_ai_enabled 1
+set bakery_ai_port 32124
+set bakery_ai_token "REPLACE_WITH_A_RANDOM_TOKEN"
+
+# Replace the placeholder with the FiveM license identifier of your development test account.
+# Leave this commented out for documentation and server tools only.
+# add_ace identifier.license:REPLACE_WITH_TEST_ACCOUNT_LICENSE bakery_ai.test allow
+
+add_ace resource.bakery_ai_bridge command.status allow
+add_ace resource.bakery_ai_bridge command.refresh allow
+add_ace resource.bakery_ai_bridge command.profiler allow
+add_ace resource.bakery_ai_bridge command.record allow
+add_ace resource.bakery_ai_bridge command.saveJSON allow
+
+# Optional development features. The defaults are off.
+# set bakery_ai_auto_optin 1
+# set bakery_ai_eval 1
+# set bakery_ai_sql 1
+

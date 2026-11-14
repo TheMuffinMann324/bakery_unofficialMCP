@@ -1,0 +1,33 @@
+{
+  "scenario": {
+    "name": "vehicle_smoke",
+    "steps": [
+      {
+        "type": "action",
+        "action": "spawn_vehicle",
+        "args": {
+          "model": "sultanrs"
+        },
+        "saveAs": "vehicle"
+      },
+      {
+        "type": "assert",
+        "check": {
+          "from": "vehicle",
+          "path": "kind",
+          "value": "vehicle"
+        }
+      },
+      {
+        "type": "action",
+        "action": "delete_entity",
+        "bind": {
+          "entityId": {
+            "from": "vehicle",
+            "path": "id"
+          }
+        }
+      }
+    ]
+  }
+}
