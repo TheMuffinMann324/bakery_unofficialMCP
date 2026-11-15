@@ -7,6 +7,8 @@ import type { ServerConfig } from "./config.js";
 
 export type Fields = Record<string, unknown>;
 export type Log = { seq: number; at: number; channel: string; message: string; resource?: string; file?: string; line?: number };
+/** The bridge token: read from the cfg file (tokenConfig) or the named environment variable (tokenEnv). */
+export const serverToken = (server: ServerConfig) => server.setupToken ?? (server.tokenEnv ? process.env[server.tokenEnv] : undefined);
 export const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
 
 export function logLevel(log: Log) {
@@ -53,8 +55,10 @@ export class Runtime {
   }
 
   async bridge(server: ServerConfig, op: string, args: Fields = {}, timeout = 6500, signal?: AbortSignal): Promise<Fields> {
-    const token = server.setupToken ?? process.env[server.tokenEnv];
-    if (!token || !/^[a-zA-Z0-9_-]{32,128}$/.test(token)) throw new Error("Configure " + server.tokenEnv + " with a random token");
+    const token = serverToken(server);
+    if (!token) throw new Error("Environment variable " + server.tokenEnv + " is not set. Set it to the bakery_ai_token value from server.cfg "
+      + "and restart your MCP client, or use \"tokenConfig\": \"server.cfg\" in config.json instead");
+    if (!/^[a-zA-Z0-9_-]{32,128}$/.test(token)) throw new Error("The bridge token must be 32-128 letters, digits, _ or -. Run npm run setup to generate one");
     let response: Response;
     try {
       response = await fetch("http://127.0.0.1:" + server.bridgePort + "/v1", {
@@ -108,7 +112,7 @@ export class Runtime {
     const record = this.logs.get(server.id) ?? { seq: 0, entries: [] };
     this.logs.set(server.id, record);
     const line = (text: string) => {
-      const token = server.setupToken ?? process.env[server.tokenEnv];
+      const token = serverToken(server);
       const sanitized = token ? text.replaceAll(token, "[redacted]") : text;
       const message = sanitized.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "").trimEnd();
       if (!message) return;

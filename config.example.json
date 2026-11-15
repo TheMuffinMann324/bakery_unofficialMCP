@@ -7,7 +7,6 @@
       "cwd": "C:/FiveM/server-data",
       "resources": "resources",
       "bridgePort": 32124,
-      "tokenEnv": "FIVEM_MCP_TOKEN",
       "tokenConfig": "server.cfg"
     }
   ]

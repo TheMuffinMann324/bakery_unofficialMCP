@@ -1,6 +1,6 @@
 {
   "name": "fivem-unofficial-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Standalone local MCP server and FiveM development bridge",
   "private": true,
   "type": "module",
@@ -9,6 +9,9 @@
   },
   "scripts": {
     "build": "tsc",
+    "prepare": "tsc",
+    "setup": "node scripts/setup.mjs",
+    "check": "node scripts/setup.mjs --check",
     "start": "node dist/index.js",
     "test": "npm run build && node --test test/*.test.mjs",
     "knowledge:sync": "node dist/knowledge-sync.js"
@@ -24,4 +27,3 @@
     "typescript": "5.9.3"
   }
 }
-

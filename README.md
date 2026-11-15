@@ -4,54 +4,52 @@ A standalone [Model Context Protocol](https://modelcontextprotocol.io/) server f
 
 ## Quick start
 
-### 1. Download and build
+Use a **development** server, not your live one.
 
-Download and extract the GitHub ZIP. Install [Node.js 22 or newer](https://nodejs.org/), then open PowerShell in the extracted folder that contains `package.json`.
+### 1. Install
+
+Install [Node.js 22 or newer](https://nodejs.org/). Download and extract the GitHub ZIP (or `git clone` it), open PowerShell in the folder that contains `package.json`, and run:
 
 ```powershell
 npm ci
-npm run build
 ```
 
-To download the offline knowledge base, also run `npm run knowledge:sync`. If you only want the documentation tools, skip to step 3.
+This installs and builds everything.
 
-### 2. Connect your FiveM development server
+### 2. Run the setup
 
-1. Drag the bundled [`bakery_ai_bridge`](resources/bakery_ai_bridge) folder into your server's `resources` folder. The result should be `resources/bakery_ai_bridge/fxmanifest.lua`. You can also use an existing category such as `[custom]`.
-2. Generate a token in PowerShell or your terminal.
+```powershell
+npm run setup
+```
 
-   ```powershell
-   node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
-   ```
+It asks for the folder that contains your `server.cfg`, then:
 
-3. Paste this block at the **top** of your development server's `server.cfg`. Replace the token placeholder and keep the quotation marks. Keep the CFG private and use plain `set` for the token.
+- copies the `bakery_ai_bridge` resource into your server's `resources` folder (or updates it in place),
+- adds a marked block to the top of `server.cfg` with a freshly generated token (the original is saved as `server.cfg.before-fivem-mcp`),
+- writes `config.json`,
+- prints the exact command to connect Claude Code, Codex or Claude Desktop, and offers to register it with Claude Code for you.
 
-   ```cfg
-   set bakery_ai_enabled 1
-   set bakery_ai_port 32124
-   set bakery_ai_token "PASTE_YOUR_GENERATED_TOKEN_HERE"
+Optional answers: your FiveM `license:` identifier (enables the in-game test tools; find it in txAdmin's player info) and developer extras (auto opt-in, `lua_eval`, read-only `db_query`). Running setup again is safe: it keeps your token and replaces only its own block.
 
-   add_ace resource.bakery_ai_bridge command.status allow
-   add_ace resource.bakery_ai_bridge command.refresh allow
-   add_ace resource.bakery_ai_bridge command.profiler allow
-   add_ace resource.bakery_ai_bridge command.record allow
-   add_ace resource.bakery_ai_bridge command.saveJSON allow
+### 3. Restart and check
 
-   ensure bakery_ai_bridge
-   ```
+Restart FXServer, then restart your MCP client, and run:
 
-   If an existing `ensure` already starts the bridge, keep that line and omit the duplicate from the block.
+```powershell
+npm run check
+```
 
-4. Copy [`config.example.json`](config.example.json) to **`config.json`** in the downloaded MCP folder. Change `cwd` to the folder containing your `server.cfg` and `workspace` to that server's `resources` folder. Use forward slashes in Windows paths. The example reads the token from `server.cfg`.
-5. Restart FXServer using txAdmin or your usual launcher.
+It explains in plain words what works and what to fix. When it says **Everything needed is working**, ask your client to call `server_get_status`.
 
-### 3. Connect a client and check it works
+For the in-game tools, join the server and run `bakery_ai_test on` in F8 (automatic if you enabled developer extras).
 
-Pick **one** client below. In its example, replace `C:/Projects/fivem-unofficialMCP/dist/index.js` with the full path to your downloaded folder's `dist/index.js`. The client launches the MCP automatically. For a manual startup check, run `npm start` in the project folder. It waits quietly for MCP messages. Press **Ctrl+C** when finished.
+To also download the offline documentation, run `npm run knowledge:sync`.
 
-Once connected, ask the client to call `server_get_status`. When one server is configured, you can omit the server ID. **`state: "ready"`** means the MCP authenticated to the bridge. For documentation only, call `knowledge_sources` after syncing.
+### Connecting a client by hand
 
-### Codex
+`npm run setup` prints these commands with your real path filled in. Replace `C:/Projects/fivem-unofficialMCP/dist/index.js` with the full path to your folder's `dist/index.js` if you set it up yourself.
+
+#### Codex
 
 ```powershell
 codex mcp add fivem-unofficial -- node "C:/Projects/fivem-unofficialMCP/dist/index.js"
@@ -69,7 +67,7 @@ tool_timeout_sec = 180
 
 Reload Codex and check `/mcp` in the CLI. [Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)
 
-### Claude Code
+#### Claude Code
 
 ```powershell
 claude mcp add --transport stdio --scope user fivem-unofficial -- node "C:/Projects/fivem-unofficialMCP/dist/index.js"
@@ -78,7 +76,7 @@ claude mcp list
 
 Run `/mcp` in Claude Code to check the connection. [Claude Code MCP documentation](https://code.claude.com/docs/en/mcp)
 
-### Claude Desktop
+#### Claude Desktop
 
 Open **Settings → Developer → Edit Config**. Merge this entry into the existing `mcpServers` object, then quit and reopen Claude Desktop.
 
@@ -99,11 +97,41 @@ On Windows the configuration file is normally `%APPDATA%\Claude\claude_desktop_c
 
 The MCP and FXServer run on the same machine because the bridge listens on `127.0.0.1`. For a VPS, build and run the MCP on the VPS alongside FXServer. A Codex or Claude client on your PC can use it if the client launches that remote process over SSH stdio. The local client examples above assume a same-machine install. Your FiveM game can join the server from your PC. Local client logs, NUI DevTools, and Windows window capture require the game client on the MCP host.
 
+## Manual setup
+
+`npm run setup` does all of this for you. To do it by hand instead:
+
+1. Copy [`resources/bakery_ai_bridge`](resources/bakery_ai_bridge) into your server's `resources` folder, so `resources/bakery_ai_bridge/fxmanifest.lua` exists. A category such as `[custom]` also works.
+2. Generate a token: `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`
+3. Add this at the **top** of `server.cfg`. Use plain `set` (not `setr`/`sets`) so the token stays on the server.
+
+   ```cfg
+   set bakery_ai_enabled 1
+   set bakery_ai_port 32124
+   set bakery_ai_token "PASTE_YOUR_GENERATED_TOKEN_HERE"
+
+   add_ace resource.bakery_ai_bridge command.status allow
+   add_ace resource.bakery_ai_bridge command.refresh allow
+   add_ace resource.bakery_ai_bridge command.profiler allow
+   add_ace resource.bakery_ai_bridge command.record allow
+   add_ace resource.bakery_ai_bridge command.saveJSON allow
+   # For in-game test tools:
+   # add_ace identifier.license:YOUR_LICENSE bakery_ai.test allow
+
+   ensure bakery_ai_bridge
+   ```
+
+   Leave out `ensure bakery_ai_bridge` if something else (such as `ensure [custom]`) already starts it.
+4. Copy [`config.example.json`](config.example.json) to `config.json` and change `cwd` to the folder containing `server.cfg` and `workspace` to its `resources` folder (forward slashes on Windows). `"tokenConfig": "server.cfg"` reads the token from that file, so you do not need an environment variable.
+5. Restart FXServer and your MCP client, then run `npm run check`.
+
+To keep the bridge settings out of `server.cfg`, use the [private CFG template](examples/fivem-mcp.local.cfg.example), point `tokenConfig` at it, and `exec` it above the bridge's `ensure`.
+
 ## Optional configuration
 
-If you prefer to keep the bridge settings in a separate file, the [private CFG template](examples/fivem-mcp.local.cfg.example) still works. Point `tokenConfig` to that file and put its `exec` above the bridge's `ensure` in `server.cfg`.
+For the in-game tools, the test account needs `add_ace identifier.license:YOUR_LICENSE bakery_ai.test allow` (setup adds it when you give your license). Join the server and run `bakery_ai_test on` in F8, then check `testClients` in `server_get_status`. Run `bakery_ai_test off` to end the test session.
 
-For player tools, add `add_ace identifier.license:YOUR_TEST_ACCOUNT_LICENSE bakery_ai.test allow` above the bridge's `ensure`, replacing the placeholder with your test account's license identifier. Restart FXServer, join the server, and run `bakery_ai_test on` in F8. Check `testClients` in `server_get_status`. Run `bakery_ai_test off` to end the test session.
+Developer extras, all off by default: `set bakery_ai_auto_optin 1` opts the test account in automatically after joins and bridge restarts, `set bakery_ai_eval 1` enables `lua_eval`, and `set bakery_ai_sql 1` enables read-only `db_query` through oxmysql. List the F8 commands the MCP may run in `allowClientCommands`, for example `["racing"]`, or `["*"]` for any.
 
 If the resources you want to manage live in a category like `[custom]`, point `workspace` and `servers[].resources` to the folder that directly contains them.
 
@@ -117,7 +145,8 @@ If the resources you want to manage live in a category like `[custom]`, point `w
 | `servers[].resources` | Installed resource directory, relative to `cwd`. This can point to the same directory as `workspace`. |
 | `servers[].executable`, `args` | Optional local executable relative to `cwd`, plus its launch arguments. |
 | `servers[].bridgePort` | Loopback port matching `bakery_ai_port`. Use a unique port and token for each target. |
-| `servers[].tokenConfig`, `tokenEnv` | Private CFG relative to `cwd`. Omit `tokenConfig` to use the named environment variable instead. |
+| `servers[].tokenConfig` | The cfg file (relative to `cwd`) containing `set bakery_ai_token "..."`, usually `server.cfg`. Recommended. |
+| `servers[].tokenEnv` | Alternative to `tokenConfig`: the **name** of an environment variable that holds the token, such as `BAKERY_FIVEM_TOKEN`. Never the token itself. |
 | `servers[].allowCommands` | Server allowlist, selected from `status`, `refresh`, and `say`. The bridge also checks its convar and ACE allowlists. |
 | `servers[].allowClientCommands` | Allowlisted F8 commands for testing. Empty by default. |
 | `nuiDevtoolsPort`, `clientLogDir` | Local FiveM client settings. Defaults to port `13172` and `%LOCALAPPDATA%/FiveM/FiveM.app/logs` on Windows. |
@@ -167,12 +196,16 @@ Git ignores the generated cache in `.bakery-data/knowledge/`. Sync preserves the
 
 ## Troubleshooting
 
+Start with `npm run check`. It tests the config, the installed bridge, the token and the connection, and says what to fix.
+
 | Symptom | What to check |
 | --- | --- |
-| Client cannot launch the MCP | Run `npm ci` and `npm run build`. Check the absolute entry path and Node executable. |
+| Tools reply `config.json is invalid` | The message names the field and the fix. Running `npm run setup` again rewrites `config.json` correctly. |
+| `tokenEnv` "must match pattern" (older versions) | The token was pasted into `tokenEnv`. Delete `tokenEnv` and use `"tokenConfig": "server.cfg"`, or update and run `npm run setup`. |
+| Client cannot launch the MCP | Run `npm ci`. Check the absolute entry path and Node executable. |
 | Knowledge sources show as missing | Run `npm run knowledge:sync` and confirm that the client uses the same state directory. |
-| Bridge authentication fails | Check that the private CFG loads before the bridge, and verify the port and token match. Restart FXServer and the MCP client. |
-| `server_get_status` shows an empty server list | Create `config.json` beside `package.json` and restart the MCP client. |
+| Bridge authentication fails | The token changed after FXServer started. Restart FXServer, then the MCP client. |
+| `server_get_status` shows an empty server list | No `config.json` yet. Run `npm run setup` and restart the MCP client. |
 | Bridge unreachable | Confirm FXServer started `bakery_ai_bridge`, the bridge port matches, and both processes run on the same machine. |
 | No opted-in test client | Check the license ACE, join your dev server, and run `bakery_ai_test on` in F8. |
 | NUI tools show no pages | Open the local FiveM client, join a server, and check the DevTools port. |
@@ -183,12 +216,4 @@ Git ignores the generated cache in `.bakery-data/knowledge/`. Sync preserves the
 npm test
 ```
 
-Tests cover the MCP connection, source editing, scenario execution, local log parsing, Lua syntax, and knowledge searches. To include the optional live test, set `BAKERY_SMOKE_FXSERVER` to your FXServer executable and `BAKERY_SMOKE_LICENSE_CFG` to a local cfg containing a valid server license. It creates an isolated temporary instance on loopback ports 33124 and 33125.
-
-
-
-
-
-
-
-
+Tests cover the MCP connection, source editing, scenario execution, local log parsing, Lua syntax, knowledge searches, config error messages, and the setup and check scripts (against temporary folders). To include the optional live test, set `BAKERY_SMOKE_FXSERVER` to your FXServer executable and `BAKERY_SMOKE_LICENSE_CFG` to a local cfg containing a valid server license. It creates an isolated temporary instance on loopback ports 33124 and 33125.
