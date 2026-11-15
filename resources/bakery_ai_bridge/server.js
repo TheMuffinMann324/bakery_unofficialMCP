@@ -83,7 +83,7 @@ function startBridge() {
     onNet('bakery_ai_bridge:result', (key, ok, result) => {
         const id = Number(global.source);
         const job = pending.get(key);
-        if (!job || job.player !== id || !players.has(id)) return;
+        if (!job || job.player !== id || players.get(id)?.session !== job.session || !IsPlayerAceAllowed(String(id), 'bakery_ai.test')) return;
         if (!ok) return finish(key, typeof result === 'string' ? result.slice(0, 500) : 'Client action failed');
         if (!result || typeof result !== 'object') return finish(key, 'Malformed client result');
         let size;
@@ -94,16 +94,16 @@ function startBridge() {
     onNet('bakery_ai_bridge:diagnostic', (level, message) => {
         const id = Number(global.source);
         const entry = players.get(id);
-        if (!entry || Date.now() - entry.lastReport < 200 || !['error', 'warning', 'info'].includes(level)
+        if (!entry || !IsPlayerAceAllowed(String(id), 'bakery_ai.test') || Date.now() - entry.lastReport < 200 || !['error', 'warning', 'info'].includes(level)
             || typeof message !== 'string') return;
         entry.lastReport = Date.now();
-        report('client:' + id, level + ': ' + message);
+        report('client:' + id, level + ': ' + message.slice(0, 1200));
     });
 
     function client(args) {
-        const id = Number(args.player);
+        const id = args.player;
         const entry = players.get(id);
-        if (!entry || (args.session && args.session !== entry.session) || !IsPlayerAceAllowed(String(id), 'bakery_ai.test')) {
+        if (!Number.isInteger(id) || !entry || args.session !== entry.session || !IsPlayerAceAllowed(String(id), 'bakery_ai.test')) {
             throw new Error('Test player is unavailable or has not opted in');
         }
         if ([...pending.values()].some(job => job.player === id)) throw new Error('Test player is already executing an action');
@@ -115,7 +115,7 @@ function startBridge() {
         return new Promise((resolve, reject) => {
             const key = randomUUID();
             const timer = setTimeout(() => finish(key, 'Client action timed out. Inspect state before retrying'), 4800);
-            pending.set(key, { player, resolve, reject, timer });
+            pending.set(key, { player, session: args.session, resolve, reject, timer });
             emitNet('bakery_ai_bridge:run', player, key, op, args);
         });
     }
@@ -127,8 +127,11 @@ function startBridge() {
         return new Promise((resolve, reject) => {
             const key = randomUUID();
             const timer = setTimeout(() => finish(key, 'Screenshot timed out'), 4800);
-            pending.set(key, { player, resolve, reject, timer });
+            pending.set(key, { player, session: args.session, resolve, reject, timer });
             const accept = (err, data) => {
+                    if (players.get(player)?.session !== args.session || !IsPlayerAceAllowed(String(player), 'bakery_ai.test')) {
+                        return finish(key, 'Test player withdrew consent');
+                    }
                     if (err || typeof data !== 'string' || !data.startsWith('data:image/jpeg;base64,') || data.length > 2800000) {
                         finish(key, 'Screenshot failed or exceeded size limit');
                     } else finish(key, null, { mimeType: 'image/jpeg', data: data.split(',')[1] });
@@ -193,12 +196,12 @@ function startBridge() {
     }
 
     const readOnlySql = /^(select|show|describe|desc|explain|with)\b/i;
-    const writeSql = /\b(?:insert|update|delete|replace|drop|alter|create|truncate|grant|revoke|rename|call|handler|lock|unlock|set|load)\b|into\s+(?:out|dump)file|\b(?:sleep|benchmark|load_file)\s*\(/i;
+    const writeSql = /\b(?:insert|update|delete|replace|drop|alter|create|truncate|grant|revoke|rename|call|handler|lock|unlock|set|load)\b|into\s+(?:out|dump)file|\bfor\s+(?:update|share)\b|\b(?:sleep|benchmark|load_file|get_lock|release_lock|release_all_locks)\s*\(/i;
     function sql(args) {
         if (!sqlEnabled) throw new Error('Database queries are disabled. Set bakery_ai_sql 1 in the development server.cfg');
         if (GetResourceState('oxmysql') !== 'started') throw new Error('oxmysql is not started');
         const query = String(args.query ?? '').trim().replace(/;\s*$/, '');
-        if (!query || query.length > 4000 || query.includes(';') || !readOnlySql.test(query) || writeSql.test(query)) {
+        if (!query || query.length > 4000 || /;|\/\*|--|#/.test(query) || !readOnlySql.test(query) || writeSql.test(query)) {
             throw new Error('Only a single read-only SELECT, SHOW, DESCRIBE, EXPLAIN or WITH query is allowed');
         }
         const params = Array.isArray(args.params) ? args.params.slice(0, 32) : [];
@@ -209,7 +212,7 @@ function startBridge() {
                 clearTimeout(timer);
                 if (!Array.isArray(rows)) return reject(new Error('Query failed. Check server_get_logs for the oxmysql error'));
                 let shown = rows.slice(0, limit);
-                while (shown.length > 1 && Buffer.byteLength(JSON.stringify(shown)) > 30000) shown = shown.slice(0, Math.floor(shown.length / 2));
+                while (shown.length > 0 && Buffer.byteLength(JSON.stringify(shown)) > 30000) shown = shown.slice(0, Math.floor(shown.length / 2));
                 resolve({ rows: shown, rowCount: rows.length, truncated: shown.length < rows.length });
             });
         });
@@ -297,9 +300,11 @@ function startBridge() {
         if (req.socket.remoteAddress !== '127.0.0.1' || provided.length !== auth.length || !timingSafeEqual(provided, auth)) {
             return reply(401, { ok: false, error: 'Unauthorized' });
         }
+        if (req.headers.origin !== undefined) return reply(403, { ok: false, error: 'Browser requests are not allowed' });
         if (req.url !== '/v1' || req.method !== 'POST' || req.headers['content-type'] !== 'application/json') {
             return reply(404, { ok: false, error: 'Unknown route' });
         }
+        if (Number(req.headers['content-length']) > 32768) return reply(413, { ok: false, error: 'Request is too large' });
         if (requests >= 32) return reply(429, { ok: false, error: 'Bridge is busy' });
         requests++;
         res.once('close', () => { requests--; });
@@ -325,6 +330,7 @@ function startBridge() {
         });
     });
     server.maxConnections = 64;
+    server.setTimeout(10000, socket => socket.destroy());
     server.on('error', error => console.error('Bakery bridge listener:', error.code));
     server.listen(port, '127.0.0.1');
     on('onResourceStop', stopped => {
@@ -334,3 +340,4 @@ function startBridge() {
         server.closeAllConnections();
     });
 }
+

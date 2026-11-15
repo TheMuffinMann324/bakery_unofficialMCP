@@ -34,13 +34,20 @@ if (process.argv[2] === "approve-delete") {
   console.error("Delete approved for the requested resource");
 } else {
   if (process.argv.length > 2) throw new Error("Usage: node dist/index.js [approve-delete REQUEST_ID ABSOLUTE_RESOURCE_PATH]");
-  const { workspace, servers, nuiDevtoolsPort, clientLogDir } = await loadConfig();
+  // A broken config.json must not crash the MCP: the client would only show "disconnected".
+  // Start anyway; documentation tools work and every other tool reports the config problem.
+  let configError: string | undefined;
+  const { workspace, servers, nuiDevtoolsPort, clientLogDir } = await loadConfig().catch(error => {
+    configError = errorText(error);
+    console.error(configError);
+    return { workspace: resolve(project, "workspace"), servers: [] as ServerConfig[], nuiDevtoolsPort: 13172, clientLogDir: "" };
+  });
   const runtime = new Runtime(servers);
   const tests = new Scenarios(runtime);
   const nui = new Nui(nuiDevtoolsPort);
   const clientLog = new ClientLog(clientLogDir);
   function makeServer() {
-    const mcp = new McpServer({ name: "fivem-unofficial-mcp", version: "0.2.0" }, { instructions });
+    const mcp = new McpServer({ name: "fivem-unofficial-mcp", version: "0.3.0" }, { instructions });
     registerTools(mcp);
     return mcp;
   }
@@ -76,6 +83,7 @@ if (process.argv[2] === "approve-delete") {
       let images: Image[] = [];
       try {
         if (closing) throw new Error("Bakery MCP is stopping");
+        if (configError && !operation.startsWith("knowledge_")) throw new Error(configError);
         if (!readOnly) {
           const target = input as Fields;
           await audit({ operation, phase: "requested", server: target.server, resource: target.resource,
@@ -85,7 +93,7 @@ if (process.argv[2] === "approve-delete") {
         images = (attached as Image[] | undefined) ?? [];
         data = { success: output.state !== "failed", ...output };
       } catch (error) {
-        data = { success: false, error: errorText(error).slice(0, 600) };
+        data = { success: false, error: errorText(error).slice(0, 1500) };
       }
       if (!readOnly) {
         try { await audit({ operation, phase: "finished", success: data.success, durationMs: Math.round(performance.now() - start) }); }
